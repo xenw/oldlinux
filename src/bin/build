@@ -1,0 +1,39 @@
+#!/bin/bash
+# build.sh
+
+bootsect=$1
+setup=$2
+system=$3
+image=$4
+root_dev=$5
+
+# Set the sys_size limit
+SYS_SIZE=$((0x3000*16))
+
+# set default root device
+if [ -z "$root_dev" ]
+then
+	ROOT_MAJOR=3
+	ROOT_MINOR=1
+else
+	ROOT_MAJOR=${root_dev:0:2}
+	ROOT_MINOR=${root_dev:2:3}
+fi
+
+# Write bootsect (512 bytes, one sector)
+test ! -f "$bootsect" && echo "no bootsect" && exit -1
+dd if=$bootsect bs=512 count=1 of=$image 1>/dev/null 2>/dev/null
+
+# Write setup(4 * 512bytes, four sectors)
+test ! -f "$setup" && echo "no setup" && exit -1
+dd if=$setup seek=1 bs=512 count=4 of=$image 1>/dev/null 2>/dev/null
+
+# Write system(< SYS_SIZE)
+test ! -f "$system" && echo "no system" && exit -1
+system_size=`wc -c $system | cut -d" " -f1`
+test $system_size -gt $SYS_SIZE && echo "system limit exceeded" && exit -1
+dd if=$system seek=5 bs=512 count=$((2888-1-4)) of=$image 1>/dev/null 2>/dev/null
+
+# Set default device
+echo -ne "\x$ROOT_MINOR\x$ROOT_MAJOR" \
+| dd ibs=1 obs=1 count=2 seek=508 of=$image conv=notrunc 1>/dev/null 2>/dev/null
